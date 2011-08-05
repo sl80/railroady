@@ -4,6 +4,7 @@
 # Copyright 2007-2008 - Javier Smaldone (http://www.smaldone.com.ar)
 # See COPYING for more details
 
+require "digest"
 
 # RailRoady diagram structure
 class DiagramGraph
@@ -40,13 +41,104 @@ class DiagramGraph
            dot_footer
   end
 
-  # Generate XMI diagram (not yet implemented)
+  # Generate XMI diagram 
   def to_xmi
-     STDERR.print "Sorry. XMI output not yet implemented.\n\n"
-     return ""
+     i=1;
+     nodes = @nodes.map{ |n| {:type => n[0], :name => n[1], :attributes => n[2]}  }
+     edges = @edges.map{ |n| {:type =>n[0], :from => n[1], :to => n[2], :name => n[3], :nr => i+=1}  }
+     return xmi_header +
+       nodes.map{ |n| xmi_node n }.join +
+       edges.map{ |e| xmi_edge e }.join +
+       xmi_footer
   end
-
+  
   private
+  
+  
+  def xmi_header
+    <<-eos
+<?xml version = '1.0' encoding = 'UTF-8' ?>
+      <XMI xmi.version = '1.2' xmlns:UML = 'org.omg.xmi.namespace.UML' >
+        <XMI.header>    
+          <XMI.documentation>
+            <XMI.exporter>railroady</XMI.exporter>
+            <XMI.exporterVersion></XMI.exporterVersion>
+          </XMI.documentation>
+          <XMI.metamodel xmi.name="UML" xmi.version="1.4"/>
+        </XMI.header>
+      <XMI.content>
+        <UML:Model xmi.id = '123456'
+          name = 'Rails' isSpecification = 'false' isRoot = 'false' isLeaf = 'false'
+          isAbstract = 'false'>
+          <UML:Namespace.ownedElement>
+    eos
+  end
+  
+  def xmi_footer
+    <<-eos
+            </UML:Namespace.ownedElement>
+          </UML:Model>
+        </XMI.content>
+      </XMI>
+    eos
+  end
+  
+  def xmi_node(node)
+    <<-eos
+      <UML:Class xmi.id = '#{md5 node[:name]}'
+        name = '#{node[:name]}' visibility = 'public' isSpecification = 'false' isRoot = 'false'
+        isLeaf = 'false' isAbstract = 'false' isActive = 'false'>
+      </UML:Class>
+    eos
+  end
+  
+  def xmi_edge(edge)
+    case edge[:type]
+      
+      when "one-one", "one-many", "many-many"
+        return  <<-eos
+              <UML:Association xmi.id = '123-#{edge[:nr]}'
+                name = '' isSpecification = 'false' isRoot = 'false' isLeaf = 'false' isAbstract = 'false'>
+                <UML:Association.connection>
+                  <UML:AssociationEnd xmi.id = '123-#{edge[:nr]}-1'
+                    visibility = 'public' isSpecification = 'false' isNavigable = 'false' ordering = 'unordered'
+                    aggregation = '#{edge[:type] == 'many-many' ? 'none' : 'aggregate'}' targetScope = 'instance' changeability = 'changeable'>
+                    <UML:AssociationEnd.participant>
+                      <UML:Class xmi.idref = '#{md5 edge[:from]}'/>
+                    </UML:AssociationEnd.participant>
+                  </UML:AssociationEnd>
+                  <UML:AssociationEnd xmi.id = '123-#{edge[:nr]}-2'
+                    visibility = 'public' isSpecification = 'false' isNavigable = 'true' ordering = 'unordered'
+                    aggregation = 'none' targetScope = 'instance' changeability = 'changeable'>
+                    <UML:AssociationEnd.participant>
+                      <UML:Class xmi.idref = '#{md5 edge[:to]}'/>
+                    </UML:AssociationEnd.participant>
+                  </UML:AssociationEnd>
+                </UML:Association.connection>
+              </UML:Association>
+        eos
+     when "is-a"
+        return  <<-eos
+          <UML:Generalization xmi.id = '234-#{edge[:nr]}'
+             isSpecification = 'false'>
+             <UML:Generalization.child>
+               <UML:Class xmi.idref = '#{md5 edge[:to]}'/>
+             </UML:Generalization.child>
+             <UML:Generalization.parent>
+               <UML:Class xmi.idref = '#{md5 edge[:from]}'/>
+             </UML:Generalization.parent>
+           </UML:Generalization>
+        eos
+     end
+     return ""  
+  end
+  
+  
+  def md5(string)
+    Digest::MD5.hexdigest(string)
+  end
+  
+  
 
   # Build DOT diagram header
   def dot_header
